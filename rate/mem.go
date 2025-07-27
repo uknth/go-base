@@ -17,11 +17,20 @@ func (il *inMemoryLimiter) Allow(key Key) bool {
 	if il.limit == 0 {
 		return false
 	}
-	limiter, ok := il.limiters[key]
-	if !ok {
-		il.mu.Lock()
-		defer il.mu.Unlock()
 
+	il.mu.RLock()
+	limiter, ok := il.limiters[key]
+	il.mu.RUnlock()
+	if ok {
+		return limiter.Allow()
+	}
+
+	il.mu.Lock()
+	defer il.mu.Unlock()
+
+	// Double-check after acquiring write lock
+	limiter, ok = il.limiters[key]
+	if !ok {
 		limiter = rate.NewLimiter(rate.Limit(il.limit), il.burst)
 		il.limiters[key] = limiter
 	}
